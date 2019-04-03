@@ -1,2 +1,2 @@
-# MEDICAL DOCUMENTATION REGISTRATION WITH BLOCK CHAIN TECHNOLOGY
+# Medical Documentation Registration With Block Chain Technology
 Senior Project Repository
