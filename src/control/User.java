@@ -3,7 +3,6 @@ package control;
 
 import blockchain.chain.Transaction;
 import com.google.gson.Gson;
-import control.File;
 import cryption.*;
 
 import java.security.NoSuchAlgorithmException;
@@ -12,43 +11,35 @@ import java.util.*;
 import static cryption.RSA.encrypt;
 
 public class User {
-    private int userType;       // 0: Patient, 1: Doctor, 2: Hospital
     private String userID;      // Unique user identifier
+    private String userType;    // patient, doctor, hospital, pharmacy, insurance
+    private String fullName;    // full name
     private String userName;    // login name
     private String password;    // login password
-    private String firstName;   // user credentials
-    private String lastName;
-    private String key;         // AES encryption key
+    private String firstName;   // user credentials: name
+    private String lastName;    // user credentials: surname
+    private String birth;       // user credentials: date of birth
     private String salt;        // AES salt
     private String publicKey;   // RSA public key
     private String privateKey;  // RSA private key
 
-    private List<String> files; // list of file names
+    private List<String> files; // list of fileID's
     private Map<String, List<String>> filePermissions;
 
     // Constructor
-    public User(int userType, String userName, String password, String firstName, String lastName) {
+    public User(String userType, String userName, String password, String firstName, String lastName) {
         this.userType = userType;
         this.userID = UUID.randomUUID().toString();
         this.userName = userName;
         this.password = password;
         this.firstName = firstName;
         this.lastName = lastName;
+        this.fullName = firstName + " " + lastName;
 
         this.files = new ArrayList<>();
         this.filePermissions = new HashMap<>();
 
         generateRSAKeys();
-        generateNewKey();
-    }
-
-    // Generates AES key for new users
-    private void generateNewKey() {
-        //SecureRandom secureRandom = new SecureRandom();
-        //byte[] token = new byte[16];
-        //secureRandom.nextBytes(token);
-        //this.key = new BigInteger(1, token).toString(16);
-        this.key = privateKey;
         this.salt = publicKey;
     }
 
@@ -71,10 +62,10 @@ public class User {
     }
 
     // Hospital: Encrypts a new file using target user's public key
-    File createNewFile(String data, String publicKey) {
+    FileRecord createNewFile(String data, String publicKey, String type, String fileName) {
         try {
             String encryptedString = Base64.getEncoder().encodeToString(encrypt(data, publicKey));
-            return new File(encryptedString);
+            return new FileRecord(encryptedString, type, fileName);
         } catch (Exception e) {
             System.err.println(e.getMessage());
             return null;
@@ -85,11 +76,11 @@ public class User {
         Patient: Takes previously encrypted file (by user's public key)
         and encrypts it again by using user's own AES key.
     */
-    File acceptFile(File file) {
+    FileRecord acceptFile(FileRecord file) {
         try {
             String decryptedString = RSA.decrypt(file.data, privateKey);
-            String encryptedString = AES.encrypt(decryptedString, key, salt);
-            return new File(encryptedString);
+            String encryptedString = AES.encrypt(decryptedString, privateKey, salt);
+            return new FileRecord(encryptedString, file.type, file.fileName, file.date);
         } catch (Exception e) {
             e.printStackTrace();
             return null;
@@ -97,8 +88,8 @@ public class User {
     }
 
     // Patient: decrypt file
-    String readFile(File file) {
-        return AES.decrypt(file.data, key, salt);
+    String readFile(FileRecord file) {
+        return AES.decrypt(file.data, privateKey, salt);
     }
 
     // Patient: Registers added file name
@@ -113,18 +104,18 @@ public class User {
 
     /*
         Grants file access permissions as:
-        For patient: <fileName, List<Doctors>>
+        For patient: <fileID, List<Doctors>>
         For doctor : <patientID, List<Files>>
      */
-    void grantFilePermission(String fileName, String userID) {
+    void grantFilePermission(String fileID, String userID) {
         // store permission in a new list
         List<String> permissions = new ArrayList<>();
-        permissions.add(userType == 0 ? userID : fileName);
+        permissions.add(userType.equals("patient") ? userID : fileID);
 
-        // add previous permissions to new list and update user's permissions with the list
-        if (filePermissions.containsKey(userType == 0 ? fileName : userID))
-            permissions.addAll(filePermissions.get(userType == 0 ? fileName : userID));
-        filePermissions.put(userType == 0 ? fileName : userID, permissions);
+        // add previous permissions to new list and update user's permissions with this list
+        if (filePermissions.containsKey(userType.equals("patient") ? fileID : userID))
+            permissions.addAll(filePermissions.get(userType.equals("patient") ? fileID : userID));
+        filePermissions.put(userType.equals("patient") ? fileID : userID, permissions);
     }
 
     // Patient: Checks if the given doctor has permission to access given file
@@ -141,10 +132,10 @@ public class User {
     }
 
     public String getFullName() {
-        return firstName + lastName;
+        return fullName;
     }
 
-    public int getUserType() {
+    public String getUserType() {
         return userType;
     }
 
@@ -152,7 +143,7 @@ public class User {
         return userID;
     }
 
-    String getPublicKey() {
+    public String getPublicKey() {
         return publicKey;
     }
 
